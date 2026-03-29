@@ -170,4 +170,4 @@ python3 -m pytest tests/ -v
 
 ## License
 
-Apache 2.0 — see [LICENSE.txt](LICENSE.txt).
+MIT — see [LICENSE.txt](LICENSE.txt).

@@ -1,2 +1,13 @@
 __pycache__/
 *.pyc
+
+# Secrets and credentials
+.env*
+*.key
+*.pem
+*.p8
+credentials*.json
+secrets*.json
+
+# OS files
+.DS_Store
