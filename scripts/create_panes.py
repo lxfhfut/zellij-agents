@@ -161,12 +161,59 @@ def create_panes_in_session(
     # Rename the current (main) pane so it matches the grid label
     _zellij("action", "rename-pane", main_agent_name, dry_run=dry_run)
 
-    # Phase 1: first row (col 1 ... cols-1) — split right from main
-    for c in range(1, cols):
-        agent = grid[0][c]
-        if agent is None:
-            continue
-        run_agent_pane(agent, "right")
+    # Phase 1: first row — balanced column splitting for equal widths.
+    # Naive sequential right-splits cause exponential width decay because each
+    # split halves the focused pane (50%, 25%, 12.5%, …).  Instead we always
+    # split the widest pane, yielding a balanced binary tree of splits.
+    first_row_agents = [(c, grid[0][c]) for c in range(1, cols) if grid[0][c] is not None]
+    n_new_cols = len(first_row_agents)
+
+    if n_new_cols > 0:
+        # 1. Compute which pane index to split at each step
+        widths: list[float] = [1.0]
+        split_from_indices: list[int] = []
+        for _ in range(n_new_cols):
+            max_w = max(widths)
+            # Pick the rightmost pane with max width (avoids shrinking Main
+            # when other panes are equally wide).
+            idx = len(widths) - 1 - widths[::-1].index(max_w)
+            split_from_indices.append(idx)
+            half = widths[idx] / 2
+            widths[idx] = half
+            widths.insert(idx + 1, half)
+
+        # 2. Figure out where each newly created pane ends up spatially so we
+        #    can assign the correct agent (grid column) to each creation step.
+        pane_labels: list[object] = ['main']
+        for i, split_idx in enumerate(split_from_indices):
+            pane_labels.insert(split_idx + 1, i)      # i = creation index
+
+        creation_to_spatial: dict[int, int] = {}
+        for spatial_pos, label in enumerate(pane_labels):
+            if label != 'main':
+                creation_to_spatial[int(label)] = spatial_pos  # type: ignore[arg-type]
+
+        agent_for_step: list[Agent] = []
+        for i in range(n_new_cols):
+            agent_for_step.append(grid[0][creation_to_spatial[i]])  # type: ignore[arg-type]
+
+        # 3. Execute the splits, navigating to the correct pane each time
+        current_focus = 0
+        for i in range(n_new_cols):
+            target = split_from_indices[i]
+            delta = target - current_focus
+            for _ in range(abs(delta)):
+                _zellij("action", "move-focus",
+                        "right" if delta > 0 else "left", dry_run=dry_run)
+            run_agent_pane(agent_for_step[i], "right")
+            current_focus = target + 1        # focus lands on the new pane
+
+        # Ensure focus is on the rightmost column for Phase 2
+        rightmost = n_new_cols
+        delta = rightmost - current_focus
+        for _ in range(abs(delta)):
+            _zellij("action", "move-focus",
+                    "right" if delta > 0 else "left", dry_run=dry_run)
 
     # Phase 2: remaining rows, right->left
     for c in range(cols - 1, -1, -1):
