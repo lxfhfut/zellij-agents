@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(zellij:*)",
+      "Bash(ldd /Users/lxfhfut/.local/bin/claude)"
+    ]
+  }
+}
