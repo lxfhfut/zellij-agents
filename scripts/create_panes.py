@@ -40,7 +40,6 @@ class Agent:
 
 def find_real_claude() -> str:
     """Return path to the real claude binary, robust to auto-updates."""
-    # Prefer the most recently modified binary in the versioned directory
     versions_dir = Path.home() / ".local" / "share" / "claude" / "versions"
     if versions_dir.is_dir():
         candidates = [
@@ -50,9 +49,9 @@ def find_real_claude() -> str:
         if candidates:
             return str(max(candidates, key=lambda p: p.stat().st_mtime))
 
-    # Fall back to PATH lookup (skip if it resolves to this script)
+    this_file = Path(__file__).resolve()
     found = shutil.which("claude")
-    if found and Path(found).resolve() != Path(__file__).resolve():
+    if found and Path(found).resolve() != this_file:
         return found
 
     print("ERROR: Cannot locate claude binary. Ensure Claude Code is installed.", file=sys.stderr)
@@ -128,8 +127,6 @@ def _zellij(*args: str, dry_run: bool = False) -> None:
 
 def create_panes_in_session(
     grid: list[list[Optional[Agent]]],
-    rows: int,
-    cols: int,
     real_claude: str,
     main_agent_name: str = "Main Agent",
     dry_run: bool = False,
@@ -137,23 +134,11 @@ def create_panes_in_session(
     """
     Add agent panes to the current Zellij session.
 
-    Algorithm (column-first build):
-
-    Phase 1 — fill the first row by splitting right from main:
-        for col in 1..cols-1:
-            zellij run -d right -n <name> -- claude --append-system-prompt <role>
-        Focus is now at [0, cols-1].
-
-    Phase 2 — fill subsequent rows right-to-left.
-    For each column (right->left):
-        for each extra row in that column:
-            zellij run -d down -n <name> -- ...
-        Navigate back to row-0 of column:
-            move-focus up  x (col_height - 1)
-        Navigate to previous column:
-            move-focus left  (skip for col 0)
-    Focus ends at [0,0] = main agent pane.
+    Phase 1: fill first row by splitting right from main.
+    Phase 2: fill subsequent rows right-to-left, returning focus to [0,0].
     """
+    rows = len(grid)
+    cols = len(grid[0]) if grid else 0
     total = sum(1 for r in grid for c in r if c is not None)
 
     def system_prompt(agent: Agent) -> str:
@@ -186,15 +171,17 @@ def create_panes_in_session(
     # Phase 2: remaining rows, right->left
     for c in range(cols - 1, -1, -1):
         c_height = col_height(total, cols, c)
+        created_down = 0
 
         for r in range(1, c_height):
             agent = grid[r][c]
             if agent is None:
                 continue
             run_agent_pane(agent, "down")
+            created_down += 1
 
         # Return to top of column
-        for _ in range(c_height - 1):
+        for _ in range(created_down):
             _zellij("action", "move-focus", "up", dry_run=dry_run)
 
         # Move to previous column
@@ -204,7 +191,9 @@ def create_panes_in_session(
 
 # ─── Pretty-print the planned grid ───────────────────────────────────────────
 
-def print_grid_summary(grid: list[list[Optional[Agent]]], rows: int, cols: int) -> None:
+def print_grid_summary(grid: list[list[Optional[Agent]]]) -> None:
+    rows = len(grid)
+    cols = len(grid[0]) if grid else 0
     print(f"\nAgent layout: {rows}x{cols} grid\n")
     col_width = 20
     sep = ("+" + "-" * col_width) * cols + "+"
@@ -273,13 +262,12 @@ def main() -> None:
     rows, cols = calculate_grid(total)
     grid = build_grid(all_agents, rows, cols)
 
-    print_grid_summary(grid, rows, cols)
+    print_grid_summary(grid)
 
     real_claude = find_real_claude()
 
-    # Add panes to the current Zellij session
     print(f"Adding {len(sub_agents)} agent pane(s) to current Zellij session...")
-    create_panes_in_session(grid, rows, cols, real_claude,
+    create_panes_in_session(grid, real_claude,
                             main_agent_name=main_agent.name,
                             dry_run=args.dry_run)
     print(f"✓ Created {len(sub_agents)} agent pane(s).")
