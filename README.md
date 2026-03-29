@@ -3,15 +3,17 @@
 A Claude Code skill that creates multi-agent teams in [Zellij](https://zellij.dev/) terminal panes. Each agent gets its own named pane with a role-injected system prompt, laid out in a landscape-biased grid.
 
 ```
-+-------------+-------------+-------------+
-| Main Agent  | Backend Dev | Frontend Dev|
-|  (you)      |             |             |
-+-------------+-------------+-------------+
-| QA Engineer | DevOps Eng  | Tech Writer |
-|             |             |             |
-+-------------+-------------+-------------+
-          5 sub-agents -> 2x3 grid
++-------------------+-------------------+-------------------+
+|    Main Agent     |  Auth Engineer    | Billing Engineer  |
+|      (you)        |     [0,1]         |      [0,2]        |
++-------------------+-------------------+-------------------+
+| Metering Engineer | Webhook Handler   |   QA Engineer     |
+|      [1,0]        |     [1,1]         |      [1,2]        |
++-------------------+-------------------+-------------------+
+              5 sub-agents → 2×3 grid
 ```
+
+![Zellij agent team in action](example.png)
 
 ## Prerequisites
 
